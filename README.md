@@ -1,55 +1,77 @@
 # deveco-cli
 
-DevEco Studio 工具链的 Python CLI 封装，提供 **7 条命令**覆盖鸿蒙应用开发全流程，所有输出均为结构化 JSON，可作为 [deveco-mcp](https://developer.huawei.com/consumer/cn/doc/harmonyos-guides/ide-deveco-studio) 的轻量替代，适用于脚本自动化与 Agent 驱动场景。
+DevEco Studio 工具链的 Python CLI 封装。提供 7 条命令，覆盖鸿蒙应用开发从构建到 UI 操控的完整流程。**所有输出均为 JSON（stdout），进度信息输出到 stderr**，天然适合脚本自动化与 AI Agent 驱动场景。
+
+> 仅支持 macOS，DevEco Studio 须已安装于本机。安装路径与鸿蒙工程路径均不得含空格。
 
 ---
 
-## 环境要求
-
-- macOS（DevEco Studio 安装于本机）
-- Python ≥ 3.12
-- [DevEco Studio](https://developer.huawei.com/consumer/cn/deveco-studio/) 已安装（默认路径 `/Applications/DevEco-Studio.app`）
-
-> **注意：** DevEco Studio 的安装路径及鸿蒙工程路径均不得包含空格。
-
----
-
-## 安装
+## Quick Start
 
 ```bash
-pip install -e .
-# 或使用 uv
-uv pip install -e .
+# 1. 安装
+uv pip install -e .   # 或 pip install -e .
+
+# 2. 验证
+deveco --help
+
+# 3. 第一条命令：构建工程
+deveco build --project /path/to/my-harmony-app
 ```
 
-安装后即可使用 `deveco` 命令。
-
 ---
 
-## 环境变量
+## 命令总览
 
-| 变量 | 说明 | 默认值 |
+| 命令 | 功能 | 典型用法 |
 |---|---|---|
-| `DEVECO_PATH` | DevEco Studio 安装路径 | `/Applications/DevEco-Studio.app` |
-| `ADK_KNOWLEDGE_API` | 知识库搜索 API endpoint | 内置默认地址 |
+| `build` | 构建 HAP / HSP / HAR | `deveco build -p <工程路径>` |
+| `sync` | 同步工程依赖（ohpm + hvigorw） | `deveco sync -p <工程路径>` |
+| `check` | ArkTS 静态语法检查（LSP 级别） | `deveco check -p <工程路径> Index.ets` |
+| `start` | 安装并启动应用到设备 | `deveco start -p <工程路径>` |
+| `ui-tree` | 获取当前界面 UI 组件树 | `deveco ui-tree -p <工程路径> --mode simple -o ./out` |
+| `ui-action` | UI 操作：点击 / 输入 / 滑动 / 按键 / 截图 | `deveco ui-action -p <工程路径> --type click --x 360 --y 640` |
+| `knowledge` | 搜索 HarmonyOS 开发文档 | `deveco knowledge ArkTS Text 组件` |
 
 ---
 
-## 命令一览
-
-所有命令均通过 `--project` / `-p` 指定鸿蒙工程根目录，输出为 JSON。
+## 命令详解
 
 ### `build` — 构建 HAP / HSP / HAR
 
-```bash
-deveco build --project <path> [--module entry@default] [--intent LogVerification|UIDebug|PerformanceProfile|Release]
+自动推断构建任务（`assembleApp` / `assembleHap` / `assembleHsp` / `assembleHar`），依次执行 `ohpm install` 和 `hvigorw`。
+
+**Synopsis**
+```
+deveco build -p <工程路径> [-m <模块>] [--product <产品>] [-i <意图>] [--log-path <日志>]
 ```
 
-- 依次执行 `ohpm install` 和 `hvigorw`
-- `--module` 缺省时构建整个 APP（`assembleApp`），指定时按模块类型自动选择任务（`assembleHap` / `assembleHsp` / `assembleHar`）
-- `--intent` 控制构建模式，默认 `LogVerification`（debug + 不开 debugLine）
+**参数**
 
-**输出示例：**
+| 参数 | 短写 | 必填 | 默认值 | 说明 |
+|---|---|---|---|---|
+| `--project` | `-p` | 是 | — | 鸿蒙工程根目录 |
+| `--module` | `-m` | 否 | — | 模块名（如 `entry@default`），不传则构建整个 APP |
+| `--product` | | 否 | `default` | Product 名称 |
+| `--intent` | `-i` | 否 | `LogVerification` | 构建意图，见下表 |
+| `--log-path` | | 否 | — | 构建日志保存路径 |
+
+| `--intent` 值 | buildMode | debuggable | debugLine |
+|---|---|---|---|
+| `LogVerification`（默认）| debug | true | false |
+| `UIDebug` | debug | true | true |
+| `PerformanceProfile` | debug | true | — |
+| `Release` | release | false | — |
+
+**Example**
+```bash
+# 构建整个 APP
+deveco build -p ~/projects/MyApp
+
+# 仅构建 entry 模块，Release 模式
+deveco build -p ~/projects/MyApp -m entry@default -i Release
+```
+
 ```json
 {
   "status": "ok",
@@ -63,25 +85,66 @@ deveco build --project <path> [--module entry@default] [--intent LogVerification
 
 ---
 
-### `sync` — 项目同步
+### `sync` — 同步工程依赖
 
-```bash
-deveco build --project <path> [--skip-ohpm] [--product default]
+执行 `ohpm install`（可跳过）和 `hvigorw --sync`，用于初始化依赖或更新 Gradle 配置。
+
+**Synopsis**
+```
+deveco sync -p <工程路径> [--product <产品>] [--skip-ohpm] [--log-path <日志>]
 ```
 
-执行 `ohpm install`（可跳过）+ `hvigorw --sync`，用于初始化或更新工程依赖。
+**参数**
+
+| 参数 | 短写 | 必填 | 默认值 | 说明 |
+|---|---|---|---|---|
+| `--project` | `-p` | 是 | — | 鸿蒙工程根目录 |
+| `--product` | | 否 | `default` | Product 名称 |
+| `--skip-ohpm` | | 否 | false | 跳过 ohpm install 步骤 |
+| `--log-path` | | 否 | — | 日志保存路径 |
+
+**Example**
+```bash
+deveco sync -p ~/projects/MyApp
+
+# 已运行过 ohpm，仅重新 sync hvigorw
+deveco sync -p ~/projects/MyApp --skip-ohpm
+```
+
+```json
+{
+  "status": "ok",
+  "command": "sync",
+  "message": "项目同步成功"
+}
+```
 
 ---
 
 ### `check` — ArkTS 静态语法检查
 
-```bash
-deveco check --project <path> src/main/ets/pages/Index.ets [更多文件...]
+启动 DevEco Studio 内置的 `ace-server` LSP 服务，对指定 `.ets` 文件进行静态分析，返回与 IDE 一致的诊断结果。首次运行会在工程根目录自动生成 `deveco-cli.toml` 配置文件。
+
+**Synopsis**
+```
+deveco check -p <工程路径> <file.ets> [<file2.ets> ...]
 ```
 
-通过 DevEco 内置的 `ace-server` 启动 LSP 服务，对指定 `.ets` 文件进行静态分析，返回诊断信息。
+**参数**
 
-**输出示例：**
+| 参数 | 短写 | 必填 | 默认值 | 说明 |
+|---|---|---|---|---|
+| `--project` | `-p` | 是 | — | 鸿蒙工程根目录 |
+| `<files>` | | 是 | — | 一个或多个 `.ets` 文件路径（位置参数） |
+
+**Example**
+```bash
+deveco check -p ~/projects/MyApp src/main/ets/pages/Index.ets
+
+# 同时检查多个文件
+deveco check -p ~/projects/MyApp src/main/ets/pages/Index.ets src/main/ets/components/Button.ets
+```
+
 ```json
 {
   "status": "ok",
@@ -89,7 +152,7 @@ deveco check --project <path> src/main/ets/pages/Index.ets [更多文件...]
   "files_checked": 1,
   "total_issues": 2,
   "diagnostics": {
-    "/path/to/Index.ets": [
+    "/abs/path/to/Index.ets": [
       {
         "range": {"start": {"line": 10, "character": 4}, "end": {"line": 10, "character": 12}},
         "severity": 1,
@@ -102,85 +165,270 @@ deveco check --project <path> src/main/ets/pages/Index.ets [更多文件...]
 }
 ```
 
-> severity：`1` = Error，`2` = Warning，`3` = Information，`4` = Hint
+`severity`：`1` Error · `2` Warning · `3` Information · `4` Hint
 
 ---
 
 ### `start` — 安装并启动应用
 
-```bash
-deveco start --project <path> [--device <设备ID>] [--ability EntryAbility]
+将 HAP 安装到已连接的设备或模拟器，强制停止同名进程后启动指定 Ability。未指定 `--device` 时自动发现已连接设备。
+
+**Synopsis**
+```
+deveco start -p <工程路径> [-m <模块>] [-t <构建目标>] [-d <设备>] [-a <Ability>]
 ```
 
-将 HAP 安装到已连接的设备（或模拟器）并启动指定 Ability。
+**参数**
+
+| 参数 | 短写 | 必填 | 默认值 | 说明 |
+|---|---|---|---|---|
+| `--project` | `-p` | 是 | — | 鸿蒙工程根目录 |
+| `--module` | `-m` | 否 | `entry` | 模块名 |
+| `--target` | `-t` | 否 | `default` | 构建目标 |
+| `--device` | `-d` | 否 | 自动发现 | 设备名或 ID（来自 `hdc list targets`） |
+| `--ability` | `-a` | 否 | `EntryAbility` | Ability 名称 |
+
+**Example**
+```bash
+deveco start -p ~/projects/MyApp
+
+# 指定设备和 Ability
+deveco start -p ~/projects/MyApp -d emulator-5554 -a MainAbility
+```
+
+```json
+{
+  "status": "ok",
+  "command": "start",
+  "bundle_name": "com.example.myapp",
+  "ability": "EntryAbility",
+  "hap": "/path/to/entry-default-signed.hap",
+  "message": "应用已启动"
+}
+```
 
 ---
 
-### `ui-tree` — 获取 UI 树
+### `ui-tree` — 获取 UI 组件树
 
-```bash
-deveco ui-tree --project <path> --mode simple|full --output-dir <dir> [--device <设备ID>]
+Dump 当前界面的 UI 组件树并保存到本地目录。`full` 模式通过 `uitest dumpLayout` 输出完整 JSON；`simple` 模式通过 `hidumper` 输出关键节点文本。
+
+**Synopsis**
+```
+deveco ui-tree -p <工程路径> --mode simple|full -o <输出目录> [-d <设备>]
 ```
 
-Dump 当前界面的 UI 组件树并保存到 `--output-dir`，`simple` 模式只保留关键属性，`full` 模式输出完整属性。
+**参数**
+
+| 参数 | 短写 | 必填 | 默认值 | 说明 |
+|---|---|---|---|---|
+| `--project` | `-p` | 是 | — | 鸿蒙工程根目录 |
+| `--mode` | | 是 | — | `simple`（关键节点文本）或 `full`（完整 JSON） |
+| `--output-dir` | `-o` | 是 | — | 输出目录（文件名自动带时间戳） |
+| `--device` | `-d` | 否 | 自动发现 | 设备名或 ID |
+
+**Example**
+```bash
+deveco ui-tree -p ~/projects/MyApp --mode simple -o ./ui-snapshots
+
+deveco ui-tree -p ~/projects/MyApp --mode full -o ./ui-snapshots -d 127.0.0.1:5555
+```
+
+```json
+{
+  "status": "ok",
+  "command": "ui-tree",
+  "mode": "simple",
+  "file": "/abs/path/to/ui-snapshots/ui_tree_simple_1718000000.txt",
+  "content": "...",
+  "message": "UI 树已保存"
+}
+```
 
 ---
 
 ### `ui-action` — UI 操作
 
-```bash
-# 点击
-deveco ui-action --project <path> --type click --x 360 --y 640
+在已连接设备上执行 UI 操作，通过 `hdc shell uitest uiInput` 驱动。支持 5 种操作类型，各类型所需参数不同。
 
-# 输入文本
-deveco ui-action --project <path> --type inputText --x 360 --y 200 --text "Hello"
-
-# 方向滑动
-deveco ui-action --project <path> --type directionalFling --direction 3 --velocity 600
-
-# 按键
-deveco ui-action --project <path> --type keyEvent --key1 Back
-
-# 截图
-deveco ui-action --project <path> --type screenshot --local-path ./screenshot.png
+**Synopsis**
+```
+deveco ui-action -p <工程路径> --type <类型> [类型专属参数...] [-d <设备>]
 ```
 
-支持的操作类型：
+**通用参数**
 
-| `--type` | 说明 | 必填参数 |
+| 参数 | 短写 | 必填 | 默认值 | 说明 |
+|---|---|---|---|---|
+| `--project` | `-p` | 是 | — | 鸿蒙工程根目录 |
+| `--type` | | 是 | — | 操作类型，见下表 |
+| `--device` | `-d` | 否 | 自动发现 | 设备名或 ID |
+
+**各类型专属参数**
+
+| `--type` | 专属参数 | 说明 |
 |---|---|---|
-| `click` | 点击坐标 | `--x` `--y` |
-| `inputText` | 在坐标处输入文字 | `--x` `--y` `--text` |
-| `directionalFling` | 方向滑动 | `--direction`（0左/1右/2上/3下）|
-| `keyEvent` | 按键事件 | `--key1`（可加 `--key2` `--key3` 组合键）|
-| `screenshot` | 截图 | 可选 `--local-path` 保存到本地 |
+| `click` | `--x`（必填）`--y`（必填）| 点击坐标 |
+| `inputText` | `--x`（必填）`--y`（必填）`--text`（必填）| 先清空再输入（click → 全选 → 删除 → 输入） |
+| `directionalFling` | `--direction`（0左/1右/2上/3下，默认0）`--velocity`（默认600）`--step-length`（默认200）| 方向滑动 |
+| `keyEvent` | `--key1`（必填）`--key2`（可选）`--key3`（可选）| 按键或组合键 |
+| `screenshot` | `--save-path`（设备路径，可选）`--local-path`（本地路径，可选）`--display-id`（多屏，可选）| 截图并拉取到本地 |
+
+**Example**
+```bash
+# 点击
+deveco ui-action -p ~/projects/MyApp --type click --x 360 --y 640
+
+# 在输入框输入文字
+deveco ui-action -p ~/projects/MyApp --type inputText --x 200 --y 300 --text "Hello World"
+
+# 向上滑动
+deveco ui-action -p ~/projects/MyApp --type directionalFling --direction 2 --velocity 800
+
+# 按下返回键
+deveco ui-action -p ~/projects/MyApp --type keyEvent --key1 Back
+
+# 截图保存到本地
+deveco ui-action -p ~/projects/MyApp --type screenshot --local-path ./screenshot.png
+```
+
+```json
+{
+  "status": "ok",
+  "command": "ui-action",
+  "action": "click",
+  "message": "操作成功"
+}
+```
 
 ---
 
 ### `knowledge` — 搜索 HarmonyOS 开发文档
 
-```bash
-deveco knowledge ArkTS 组件 Text
+根据关键词搜索鸿蒙开发知识库，返回相关文档片段，用于辅助代码生成。
+
+**Synopsis**
+```
+deveco knowledge <关键词> [<关键词2> ...] [--max-chars <字符数>]
 ```
 
-根据关键词搜索鸿蒙开发知识库，返回相关文档片段。可通过 `ADK_KNOWLEDGE_API` 环境变量替换默认 endpoint。
+**参数**
+
+| 参数 | 必填 | 默认值 | 说明 |
+|---|---|---|---|
+| `<keywords>` | 是 | — | 一个或多个关键词（位置参数） |
+| `--max-chars` | 否 | `5000` | 最大返回字符数 |
+
+**Example**
+```bash
+deveco knowledge ArkTS Text 组件
+
+deveco knowledge 页面路由 router --max-chars 3000
+```
+
+```json
+{
+  "status": "ok",
+  "command": "knowledge",
+  "keywords": ["ArkTS", "Text", "组件"],
+  "data": { ... }
+}
+```
 
 ---
 
-## 错误输出格式
+## 输出协议
 
-所有命令在失败时统一返回以下结构，进程退出码为 `1`：
+所有命令均遵循同一套 JSON 协议：
+
+- **stdout**：唯一的机器可读输出，始终为合法 JSON
+- **stderr**：进度信息（格式 `[deveco] ...`），供人类阅读，**不要解析**
+- **退出码**：`0` 成功，`1` 失败
+
+**成功响应通用字段**
+
+```json
+{ "status": "ok", "command": "<命令名>", ... }
+```
+
+**失败响应通用字段**
 
 ```json
 {
   "status": "error",
-  "command": "build",
-  "error_type": "build_failed",
-  "message": "hvigorw assembleHap 失败（退出码 1）",
-  "detail": "...",
-  "suggestion": "检查 ArkTS 语法错误，或运行 deveco check 进行静态检查"
+  "command": "<命令名>",
+  "error_type": "<分类>",
+  "message": "<描述>",
+  "detail": "<可选：原始日志，截断至 2000 字符>",
+  "suggestion": "<可选：修复建议>"
 }
 ```
+
+常见 `error_type`：
+
+| 值 | 含义 |
+|---|---|
+| `config_error` | DevEco 未找到或工程路径不存在 |
+| `ohpm_failed` | ohpm install 失败 |
+| `build_failed` | hvigorw 构建失败 |
+| `sync_failed` | hvigorw sync 失败 |
+| `lsp_init_timeout` | ace-server 启动超时 |
+| `no_device` | 未找到已连接设备 |
+| `hap_not_found` | 未找到 HAP 构建产物 |
+| `install_failed` | hdc install 失败 |
+| `action_failed` | UI 操作执行失败 |
+| `connection_error` | 知识库 API 不可达 |
+
+---
+
+## 环境变量
+
+| 变量 | 默认值 | 说明 |
+|---|---|---|
+| `DEVECO_PATH` | `/Applications/DevEco-Studio.app` | DevEco Studio 安装路径 |
+| `ADK_KNOWLEDGE_API` | 内置地址 | `knowledge` 命令使用的搜索 API endpoint |
+
+---
+
+## AI Agent 集成指南
+
+deveco-cli 的设计目标之一是作为 Agent 的工具调用层：
+
+**解析输出的推荐模式**
+
+```python
+import subprocess, json
+
+result = subprocess.run(
+    ["deveco", "build", "--project", project_path],
+    capture_output=True, text=True
+)
+# stdout 是 JSON，stderr 是进度日志（不解析）
+data = json.loads(result.stdout)
+if data["status"] == "error":
+    # 利用 error_type 决策下一步
+    handle_error(data["error_type"], data.get("suggestion"))
+```
+
+**典型 Agent 工作流**
+
+```
+check（静态检查）
+  → 有 Error？修复代码后重试
+  → 通过 → build（构建）
+              → 失败？根据 detail 排查
+              → 成功 → start（安装启动）
+                          → ui-tree（获取界面结构）
+                            → ui-action（执行操作）
+                              → ui-tree（验证结果）
+                                → 循环...
+```
+
+**注意事项**
+
+- `check` 首次运行较慢（ace-server 需要索引工程，最长等待约 5 分钟），后续快
+- `build` 超时 600 秒，`sync` 超时 300 秒，请勿过早中断
+- 多设备环境下建议始终传 `--device`，避免自动选择到非预期设备
 
 ---
 
