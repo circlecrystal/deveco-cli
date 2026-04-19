@@ -1,6 +1,6 @@
 # deveco-cli
 
-DevEco Studio 工具链的 Python CLI 封装。提供 7 条命令，覆盖鸿蒙应用开发从构建到 UI 操控的完整流程。**所有输出均为 JSON（stdout），进度信息输出到 stderr**，天然适合脚本自动化与 AI Agent 驱动场景。
+DevEco Studio 工具链的 Python CLI 封装。提供 8 条命令，覆盖鸿蒙应用开发从构建、UI 操控到模拟器管理的完整流程。**所有输出均为 JSON（stdout），进度信息输出到 stderr**，天然适合脚本自动化与 AI Agent 驱动场景。
 
 > 仅支持 macOS，DevEco Studio 须已安装于本机。安装路径与鸿蒙工程路径均不得含空格。
 
@@ -32,6 +32,7 @@ deveco build --project /path/to/my-harmony-app
 | `ui-tree` | 获取当前界面 UI 组件树 | `deveco ui-tree -p <工程路径> --mode simple -o ./out` |
 | `ui-action` | UI 操作：点击 / 输入 / 滑动 / 按键 / 截图 | `deveco ui-action -p <工程路径> --type click --x 360 --y 640` |
 | `knowledge` | 搜索 HarmonyOS 开发文档 | `deveco knowledge ArkTS Text 组件` |
+| `emulator` | 模拟器管理（list / start / stop） | `deveco emulator start --name "Pura 80 Ultra"` |
 
 ---
 
@@ -334,6 +335,50 @@ deveco knowledge 页面路由 router --max-chars 3000
   "data": { ... }
 }
 ```
+
+---
+
+### `emulator` — 模拟器管理
+
+提供 `list / start / stop` 三个子命令，封装 `/Applications/DevEco-Studio.app/Contents/tools/emulator/Emulator`。`start` 会后台拉起 Emulator 进程，然后轮询 `hdc list targets` 直到设备出现。
+
+**Synopsis**
+```
+deveco emulator list
+deveco emulator start --name "<实例名>" [--wait-hdc <秒数>]
+deveco emulator stop  --name "<实例名>"
+```
+
+**参数（start）**
+
+| 参数 | 短写 | 必填 | 默认值 | 说明 |
+|---|---|---|---|---|
+| `--name` | `-n` | 是 | — | 模拟器实例名（`deveco emulator list` 可查） |
+| `--wait-hdc` | | 否 | `90` | 等待 hdc 发现设备的最大秒数，超时返回 `emulator_boot_timeout` |
+
+**Example**
+```bash
+deveco emulator list
+
+deveco emulator start --name "Pura 80 Ultra" --wait-hdc 180
+
+deveco emulator stop --name "Pura 80 Ultra"
+```
+
+```json
+{
+  "status": "ok",
+  "command": "emulator-start",
+  "name": "Pura 80 Ultra",
+  "pid": 67615,
+  "connected_devices": ["127.0.0.1:5555"],
+  "message": "模拟器已启动: 127.0.0.1:5555"
+}
+```
+
+若 hdc 已有设备，`start` 会直接返回 `already_running: true` 而不再启动新实例。
+
+**`error_type` 扩展**：`deveco_not_found` / `emulator_not_found` / `emulator_exited` / `emulator_boot_timeout` / `popen_failed` / `list_failed` / `stop_failed`。
 
 ---
 

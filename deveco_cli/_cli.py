@@ -154,3 +154,39 @@ def knowledge(
     """搜索 HarmonyOS 开发文档（对应 MCP harmonyos_knowledge_search）"""
     from .commands.knowledge import search_knowledge
     _run("knowledge", search_knowledge, keywords, max_chars)
+
+
+# ─── emulator ─────────────────────────────────────────────────────────────────
+
+emulator_app = typer.Typer(
+    name="emulator",
+    help="鸿蒙模拟器管理（list / start / stop）",
+    no_args_is_help=True,
+)
+app.add_typer(emulator_app)
+
+
+@emulator_app.command("list")
+def emulator_list():
+    """列出本机所有已部署的模拟器实例。"""
+    from .commands.emulator import list_emulators
+    _run("emulator-list", list_emulators)
+
+
+@emulator_app.command("start")
+def emulator_start(
+    name: str = typer.Option(..., "--name", "-n", help="模拟器实例名"),
+    wait_hdc: int = typer.Option(90, "--wait-hdc", help="等待 hdc 出现设备的最大秒数"),
+):
+    """启动模拟器（后台进程）并等待 hdc 发现设备。"""
+    from .commands.emulator import start_emulator
+    _run("emulator-start", start_emulator, name, wait_hdc)
+
+
+@emulator_app.command("stop")
+def emulator_stop(
+    name: str = typer.Option(..., "--name", "-n", help="模拟器实例名"),
+):
+    """停止模拟器。"""
+    from .commands.emulator import stop_emulator
+    _run("emulator-stop", stop_emulator, name)
