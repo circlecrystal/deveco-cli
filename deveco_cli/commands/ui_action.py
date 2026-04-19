@@ -5,7 +5,7 @@ from pathlib import Path
 from typing import Optional
 
 from .._config import get_config
-from .._runner import run_cmd
+from .._runner import ensure_device, run_cmd
 from .._output import progress
 
 
@@ -28,6 +28,9 @@ def perform_ui_action(
 ) -> dict:
     config = get_config(project)
     hdc = str(config.hdc)
+    err = ensure_device(hdc, device)
+    if err is not None:
+        return {**err, "command": "ui-action"}
     hdc_t = [hdc] + (["-t", device] if device else [])
 
     def _err(msg: str, detail: str = "") -> dict:

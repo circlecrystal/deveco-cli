@@ -4,7 +4,7 @@ import time
 from pathlib import Path
 
 from .._config import get_config
-from .._runner import run_cmd
+from .._runner import ensure_device, run_cmd
 from .._output import progress
 
 
@@ -16,6 +16,9 @@ def get_app_ui_tree(
 ) -> dict:
     config = get_config(project)
     hdc = str(config.hdc)
+    err = ensure_device(hdc, device)
+    if err is not None:
+        return {**err, "command": "ui-tree"}
     hdc_t = [hdc] + (["-t", device] if device else [])
 
     out_dir = Path(output_directory).resolve()
